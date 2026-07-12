@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Philippines — Tap to Watch</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Philippines">
+<meta name="theme-color" content="#062831">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="">
+
+<style>
+  :root{
+    --sea-1:#0c4a5c; --sea-2:#0a3645; --sea-3:#062831;
+    --land:#519d6a; --shore:#bfeede; --sand:#f7efdd;
+    --sun:#fcd116; --sun-deep:#f0a500;
+    --coral:#ec5a3f; --coral-deep:#c8412a;
+    --ink:#06262f; --ink-soft:#46626a;
+    --cloud:#ffffff; --cloud-2:#fbf7ee; --cloud-3:#f3ead7;
+    --display:'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+    --sans:'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --glass:rgba(6,38,47,.55);
+    --glass-line:rgba(255,255,255,.13);
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    font-family:var(--sans);
+    background:var(--sea-3);
+    color:var(--ink);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none;
+    user-select:none;
+  }
+
+  /* ---------- Map ---------- */
+  #map{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(130% 100% at 26% 8%, #1a728a 0%, #0e5266 34%, #0a3a49 66%, #062831 100%);
+  }
+  .leaflet-container{ background:transparent; font-family:var(--sans); outline:none; }
+  .leaflet-container a{ color:var(--coral); }
+
+  /* Optimized island styling — removed expensive per-frame CPU SVG filters (blur/drop-shadow) */
+  .ph-glow path{
+    stroke:var(--shore);
+    stroke-width:5;
+    fill:none;
+    stroke-opacity:.28;
+    stroke-linejoin:round;
+  }
+  .ph-land path{
+    stroke:var(--sand);
+    stroke-width:1;
+    fill:var(--land);
+    fill-opacity:1;
+    stroke-linejoin:round;
+  }
+
+  /* ---------- Pins ---------- */
+  .pin{
+    position:absolute; inset:0;
+    animation:pinIn .55s cubic-bezier(.2,.75,.3,1) both;
+    animation-delay:var(--d,0ms);
+    cursor:pointer;
+    will-change:transform, opacity;
+  }
+  @keyframes pinIn{ from{ opacity:0; transform:translateY(-14px) scale(.55); } to{ opacity:1; transform:none; } }
+
+  .pin__rays{
+    position:absolute; left:50%; top:30px; width:60px; height:60px;
+    transform:translate(-50%,-50%) scale(.4);
+    background:repeating-conic-gradient(from 0deg, var(--sun) 0 5deg, transparent 5deg 45deg);
+    -webkit-mask:radial-gradient(circle, transparent 14px, #000 16px, #000 27px, transparent 29px);
+    mask:radial-gradient(circle, transparent 14px, #000 16px, #000 27px, transparent 29px);
+    opacity:0; transition:opacity .35s ease, transform .35s ease;
+    pointer-events:none;
+    will-change:transform, opacity;
+  }
+  .pin__pulse{
+    position:absolute; left:50%; top:30px; width:26px; height:26px;
+    transform:translate(-50%,-50%); border-radius:50%;
+    background:var(--coral); opacity:0; pointer-events:none;
+    will-change:transform, opacity;
+  }
+  .pin__dot{
+    position:absolute; left:50%; top:30px; width:26px; height:26px;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #ff9077, var(--coral) 58%, var(--coral-deep));
+    border:2.5px solid #fff;
+    box-shadow:0 7px 16px rgba(3,20,28,.5), inset 0 1px 1px rgba(255,255,255,.5);
+    transition:transform .25s cubic-bezier(.2,.8,.3,1);
+  }
+  .pin__dot::after{
+    content:""; position:absolute; left:50%; top:50%; width:7px; height:7px;
+    transform:translate(-50%,-50%); border-radius:50%; background:#fff; opacity:.95;
+  }
+  .pin__label{
+    position:absolute; left:50%; top:49px; transform:translateX(-50%);
+    background:rgba(255,255,255,.94);
+    color:var(--ink);
+    font:600 12px/1 var(--sans);
+    letter-spacing:.01em;
+    padding:5px 9px; border-radius:8px; white-space:nowrap;
+    box-shadow:0 4px 12px rgba(3,20,28,.28);
+    pointer-events:none;
+    transition:background .25s ease, color .25s ease, transform .25s ease;
+  }
+  .pin-wrap:hover .pin__dot{ transform:translate(-50%,-50%) scale(1.16); }
+  .pin-wrap:hover .pin__label{ transform:translateX(-50%) translateY(-1px); }
+
+  .pin.is-active .pin__dot{ transform:translate(-50%,-50%) scale(1.22); }
+  .pin.is-active .pin__label{ background:var(--ink); color:#fff; }
+  .pin.is-active .pin__rays{ opacity:.95; transform:translate(-50%,-50%) scale(1); animation:spin 18s linear infinite; }
+  .pin.is-active .pin__pulse{ animation:pulse 1.8s ease-out infinite; }
+  @keyframes spin{ to{ transform:translate(-50%,-50%) scale(1) rotate(360deg); } }
+  @keyframes pulse{ 0%{ opacity:.5; transform:translate(-50%,-50%) scale(1);} 70%{ opacity:0; transform:translate(-50%,-50%) scale(3.4);} 100%{ opacity:0; } }
+
+  /* ---------- Sun glyph (header) ---------- */
+  .sun{ position:relative; width:40px; height:40px; flex:none; }
+  .sun__rays{
+    position:absolute; inset:0;
+    background:repeating-conic-gradient(from 0deg, var(--sun) 0 6deg, transparent 6deg 45deg);
+    -webkit-mask:radial-gradient(circle, transparent 9px, #000 10px, #000 18px, transparent 19px);
+    mask:radial-gradient(circle, transparent 9px, #000 10px, #000 18px, transparent 19px);
+  }
+  .sun__core{
+    position:absolute; left:50%; top:50%; width:18px; height:18px; transform:translate(-50%,-50%);
+    border-radius:50%; background:radial-gradient(circle at 35% 30%, #ffe680, var(--sun) 58%, var(--sun-deep));
+  }
+
+  /* ---------- HUD ---------- */
+  .hud{
+    position:absolute; z-index:500;
+    top:calc(env(safe-area-inset-top,0px) + 18px);
+    left:calc(env(safe-area-inset-left,0px) + 18px);
+    display:flex; align-items:center; gap:14px;
+    padding:11px 18px 11px 13px;
+    background:var(--glass);
+    border:1px solid var(--glass-line);
+    border-radius:18px;
+    -webkit-backdrop-filter:blur(16px) saturate(150%);
+    backdrop-filter:blur(16px) saturate(150%);
+    box-shadow:0 12px 34px rgba(0,0,0,.28);
+    color:#fff;
+  }
+  .hud__text{ display:flex; flex-direction:column; }
+  .hud__eyebrow{ font-size:10px; letter-spacing:.24em; text-transform:uppercase; color:var(--sun); font-weight:700; margin-bottom:3px; }
+  .hud__title{ font-family:var(--display); font-weight:900; font-size:25px; line-height:.95; letter-spacing:-.02em; }
+
+  /* ---------- Places button + panel ---------- */
+  .ghost-btn{
+    position:absolute; z-index:500;
+    top:calc(env(safe-area-inset-top,0px) + 18px);
+    right:calc(env(safe-area-inset-right,0px) + 18px);
+    display:flex; align-items:center; gap:9px;
+    padding:12px 16px;
+    background:var(--glass);
+    border:1px solid var(--glass-line);
+    border-radius:14px;
+    -webkit-backdrop-filter:blur(16px) saturate(150%);
+    backdrop-filter:blur(16px) saturate(150%);
+    box-shadow:0 12px 34px rgba(0,0,0,.28);
+    color:#fff; font:600 14px var(--sans); cursor:pointer;
+  }
+  .ghost-btn svg{ display:block; }
+  .ghost-btn:active{ transform:scale(.97); }
+
+  .panel{
+    position:absolute; top:0; right:0; z-index:700;
+    height:100%; width:min(370px, 86vw);
+    background:linear-gradient(180deg, var(--cloud-2), var(--cloud-3));
+    transform:translateX(101%);
+    transition:transform .42s cubic-bezier(.22,.61,.36,1);
+    box-shadow:-22px 0 60px rgba(0,0,0,.3);
+    display:flex; flex-direction:column;
+    padding:calc(env(safe-area-inset-top,0px) + 20px) 18px 18px;
+  }
+  .panel.is-open{ transform:none; }
+  .panel__head{ display:flex; align-items:baseline; justify-content:space-between; padding:0 6px 14px; }
+  .panel__title{ font-family:var(--display); font-weight:700; font-size:24px; color:var(--ink); letter-spacing:-.01em; }
+  .panel__sub{ font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-soft); }
+  .panel__list{ overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:4px; padding-bottom:20px; }
+  .place-row{
+    display:flex; align-items:center; gap:13px;
+    width:100%; text-align:left;
+    padding:13px 12px; border:none; border-radius:13px;
+    background:transparent; cursor:pointer; color:var(--ink);
+    transition:background .18s ease;
+  }
+  .place-row:hover{ background:rgba(236,90,63,.09); }
+  .place-row:active{ background:rgba(236,90,63,.16); }
+  .place-row__dot{
+    width:14px; height:14px; flex:none; border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #ff9077, var(--coral) 60%, var(--coral-deep));
+    box-shadow:0 2px 5px rgba(200,65,42,.5);
+  }
+  .place-row__name{ font:600 16px var(--sans); }
+  .place-row__region{ display:block; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); margin-top:2px; }
+  .place-row__go{ margin-left:auto; color:var(--coral); opacity:.5; }
+
+  /* ---------- Scrim ---------- */
+  .scrim{
+    position:absolute; inset:0; z-index:600;
+    background:rgba(4,18,24,.5);
+    -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+    opacity:0; pointer-events:none; transition:opacity .3s ease;
+  }
+  .scrim.is-on{ opacity:1; pointer-events:auto; }
+
+  /* ---------- Video modal ---------- */
+  .modal{
+    position:fixed; inset:0; z-index:900;
+    display:flex; align-items:center; justify-content:center;
+    padding:max(22px, env(safe-area-inset-top,0px)) 22px;
+    opacity:0; pointer-events:none; transition:opacity .3s ease;
+  }
+  .modal.is-open{ opacity:1; pointer-events:auto; }
+  .modal__backdrop{ position:absolute; inset:0; background:rgba(4,16,22,.66); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); }
+  .card{
+    position:relative; width:min(880px, 100%); max-height:92vh; overflow:auto;
+    background:var(--cloud); border-radius:22px;
+    box-shadow:0 36px 90px rgba(0,0,0,.5);
+    transform:scale(.95) translateY(10px);
+    transition:transform .34s cubic-bezier(.22,.61,.36,1);
+  }
+  .modal.is-open .card{ transform:none; }
+  .card__media{ position:relative; aspect-ratio:16/9; background:#05161c; border-radius:22px 22px 0 0; overflow:hidden; }
+  .card__media video, .card__media iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:#05161c; }
+  .card__close{
+    position:absolute; top:14px; right:14px; z-index:3;
+    width:44px; height:44px; border:none; border-radius:50%;
+    background:rgba(8,28,35,.62); color:#fff; cursor:pointer;
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 14px rgba(0,0,0,.3); transition:background .2s ease, transform .2s ease;
+  }
+  .card__close:hover{ background:rgba(8,28,35,.85); }
+  .card__close:active{ transform:scale(.92); }
+  .card__body{ padding:22px 26px 26px; }
+  .card__eyebrow{ font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--coral-deep); font-weight:700; }
+  .card__title{ font-family:var(--display); font-weight:700; font-size:clamp(26px,4.4vw,34px); line-height:1.05; letter-spacing:-.015em; margin:6px 0 10px; color:var(--ink); }
+  .card__desc{ font-size:16px; line-height:1.55; color:var(--ink-soft); max-width:60ch; }
+  .card__note{
+    margin-top:16px; display:flex; gap:9px; align-items:flex-start;
+    font-size:13px; line-height:1.45; color:var(--ink-soft);
+    background:rgba(252,209,22,.13); border:1px solid rgba(240,165,0,.3);
+    padding:11px 13px; border-radius:12px;
+  }
+  .card__note b{ color:var(--ink); font-weight:700; }
+  .card__note svg{ flex:none; margin-top:1px; color:var(--sun-deep); }
+
+  /* ---------- Leaflet zoom control ---------- */
+  .leaflet-control-zoom{ border:none !important; box-shadow:0 12px 34px rgba(0,0,0,.28) !important; border-radius:14px !important; overflow:hidden; margin:0 !important; }
+  .leaflet-bottom.leaflet-right{ bottom:calc(env(safe-area-inset-bottom,0px) + 18px); right:calc(env(safe-area-inset-right,0px) + 18px); }
+  .leaflet-control-zoom a{
+    background:var(--glass) !important; color:#fff !important; border:none !important;
+    border-bottom:1px solid var(--glass-line) !important;
+    width:42px !important; height:42px !important; line-height:42px !important; font-size:21px !important;
+    -webkit-backdrop-filter:blur(16px) saturate(150%); backdrop-filter:blur(16px) saturate(150%);
+  }
+  .leaflet-control-zoom a:last-child{ border-bottom:none !important; }
+  .leaflet-control-zoom a:hover{ background:rgba(10,58,73,.8) !important; }
+
+  /* ---------- attribution ---------- */
+  .attrib{
+    position:absolute; z-index:500;
+    left:calc(env(safe-area-inset-left,0px) + 18px);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 16px);
+    font-size:11px; letter-spacing:.04em; color:rgba(255,255,255,.55);
+    pointer-events:none;
+  }
+
+  :focus-visible{ outline:3px solid var(--sun); outline-offset:2px; border-radius:6px; }
+  .leaflet-marker-icon:focus-visible{ outline:3px solid var(--sun); outline-offset:4px; }
+
+  @media (max-width:560px){
+    .hud__title{ font-size:21px; }
+    .ghost-btn span{ display:none; }
+    .ghost-btn{ padding:12px; }
+    .card__body{ padding:18px 18px 22px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+    .pin{ animation:none; }
+  }
+</style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="Map of the Philippines with places you can tap to watch a video"></div>
+
+  <header class="hud">
+    <span class="sun" aria-hidden="true"><span class="sun__rays"></span><span class="sun__core"></span></span>
+    <span class="hud__text">
+      <span class="hud__eyebrow">Tap a pin to play</span>
+      <span class="hud__title">Philippines</span>
+    </span>
+  </header>
+
+  <button class="ghost-btn" id="placesBtn" aria-haspopup="true" aria-expanded="false" aria-controls="panel">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 6h13M8 12h13M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="3.5" cy="6" r="1.6" fill="currentColor"/><circle cx="3.5" cy="12" r="1.6" fill="currentColor"/><circle cx="3.5" cy="18" r="1.6" fill="currentColor"/>
+    </svg>
+    <span>Places</span>
+  </button>
+
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="panel" id="panel" role="dialog" aria-label="All places" aria-modal="false">
+    <div class="panel__head">
+      <span class="panel__title">Places</span>
+      <span class="panel__sub" id="placeCount"></span>
+    </div>
+    <div class="panel__list" id="placeList"></div>
+  </aside>
+
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
+    <div class="modal__backdrop" id="modalBackdrop"></div>
+    <div class="card" role="document">
+      <div class="card__media" id="cardMedia"></div>
+      <button class="card__close" id="cardClose" aria-label="Close video">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="card__body">
+        <div class="card__eyebrow" id="cardRegion"></div>
+        <h2 class="card__title" id="cardTitle"></h2>
+        <p class="card__desc" id="cardDesc"></p>
+        <div class="card__note" id="cardNote" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span><b>Sample clip.</b> </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="attrib">Boundaries: Natural Earth • High Performance Render</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin=""></script>
+<script>
+/* =========================================================================
+   1) MAP GEOMETRY — Optimized lightweight archipelago MultiPolygon
+   ========================================================================= */
+const PH_GEO = {
+  "type": "Feature",
+  "properties": { "name": "Philippines" },
+  "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+      // Luzon Island Outlines
+      [[[120.58,18.55],[121.90,18.42],[122.30,18.35],[122.18,17.98],[122.52,17.14],[122.46,16.89],[122.19,16.29],[121.75,16.08],[121.65,14.46],[122.35,14.21],[124.05,13.82],[124.16,12.83],[123.95,12.55],[123.35,13.08],[122.52,13.48],[121.05,13.62],[120.62,13.82],[120.82,14.48],[120.25,14.85],[119.88,15.78],[120.25,16.18],[120.45,17.18],[120.58,18.55]]],
+      // Palawan
+      [[[119.45,11.35],[119.68,11.20],[118.82,10.05],[117.85,8.85],[117.18,8.38],[117.25,8.68],[118.35,9.85],[119.45,11.35]]],
+      // Mindoro
+      [[[120.85,13.52],[121.52,13.25],[121.48,12.35],[121.08,12.22],[120.35,12.85],[120.85,13.52]]],
+      // Panay
+      [[[121.90,11.88],[123.12,11.55],[123.05,11.15],[122.42,10.48],[121.85,10.72],[121.90,11.88]]],
+      // Negros
+      [[[123.35,10.98],[123.45,10.55],[123.28,9.08],[122.88,9.05],[122.45,9.85],[123.35,10.98]]],
+      // Cebu
+      [[[124.02,11.28],[124.05,10.85],[123.35,9.45],[123.28,9.55],[123.85,10.88],[124.02,11.28]]],
+      // Bohol
+      [[[124.28,10.15],[124.58,9.98],[124.45,9.58],[123.85,9.62],[124.28,10.15]]],
+      // Samar & Leyte
+      [[[124.62,12.58],[125.55,12.25],[125.75,11.15],[125.18,10.85],[124.78,11.35],[124.62,12.58]]],
+      [[[124.38,11.52],[125.02,10.98],[125.18,10.28],[124.78,10.18],[124.45,10.95],[124.38,11.52]]],
+      // Mindanao
+      [[[125.45,9.82],[126.62,8.32],[126.58,7.30],[126.21,6.28],[125.38,5.57],[124.58,6.02],[124.03,6.54],[121.85,6.00],[122.12,6.90],[123.45,7.82],[124.22,8.35],[125.45,9.82]]]
+    ]
+  }
+};
+
+/* =========================================================================
+   2) PLACES & VIDEO DATA
+   ========================================================================= */
+const PLACES = [
+  {
+    id: "palawan",
+    name: "El Nido Lagoons",
+    region: "Palawan",
+    lat: 11.195, lng: 119.412,
+    desc: "Limestone karsts and crystal-clear turquoise lagoons.",
+    embed: '<iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>'
+  },
+  {
+    id: "cebu",
+    name: "Kawasan Falls",
+    region: "Cebu",
+    lat: 9.805, lng: 123.374,
+    desc: "Multi-tiered tropical waterfalls famous for vibrant electric-blue water.",
+    embed: '<iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>'
+  },
+  {
+    id: "siargao",
+    name: "Cloud 9 Boardwalk",
+    region: "Siargao Island",
+    lat: 9.812, lng: 126.164,
+    desc: "The surfing capital of the Philippines surrounded by endless coconut palms.",
+    embed: '<iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>'
+  },
+  {
+    id: "banaue",
+    name: "Banaue Rice Terraces",
+    region: "Ifugao, Luzon",
+    lat: 16.918, lng: 121.058,
+    desc: "2,000-year-old terraces carved into the Cordillera mountains.",
+    embed: '<iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>'
+  }
+];
+
+/* =========================================================================
+   3) INITIALIZE LEAFLET MAP — USING PREFERCANVAS FOR ZERO-CPU RENDER
+   ========================================================================= */
+const map = L.map('map', {
+  center: [12.8, 122.5],
+  zoom: 6,
+  minZoom: 5,
+  maxZoom: 10,
+  zoomControl: true,
+  attributionControl: false,
+  preferCanvas: true /* Hardware-accelerated canvas rendering for polygons */
+});
+
+/* Render Archipelago Layer */
+L.geoJSON(PH_GEO, {
+  className: 'ph-glow'
+}).addTo(map);
+
+L.geoJSON(PH_GEO, {
+  className: 'ph-land'
+}).addTo(map);
+
+/* =========================================================================
+   4) PIN MARKERS & INTERACTIVITY
+   ========================================================================= */
+const markers = {};
+
+PLACES.forEach((place, i) => {
+  const icon = L.divIcon({
+    className: 'pin-wrap',
+    iconSize: [60, 60],
+    iconAnchor: [30, 30],
+    html: `
+      <div class="pin" style="--d:${i * 120}ms" data-id="${place.id}">
+        <div class="pin__rays"></div>
+        <div class="pin__pulse"></div>
+        <div class="pin__dot"></div>
+        <div class="pin__label">${place.name}</div>
+      </div>
+    `
+  });
+
+  const marker = L.marker([place.lat, place.lng], { icon }).addTo(map);
+  markers[place.id] = marker;
+
+  marker.on('click', () => openModal(place));
+});
+
+/* =========================================================================
+   5) SIDE PANEL & MODAL CONTROLS
+   ========================================================================= */
+const placesBtn = document.getElementById('placesBtn');
+const panel = document.getElementById('panel');
+const scrim = document.getElementById('scrim');
+const placeList = document.getElementById('placeList');
+const placeCount = document.getElementById('placeCount');
+
+const modal = document.getElementById('modal');
+const modalBackdrop = document.getElementById('modalBackdrop');
+const cardClose = document.getElementById('cardClose');
+const cardMedia = document.getElementById('cardMedia');
+const cardTitle = document.getElementById('cardTitle');
+const cardRegion = document.getElementById('cardRegion');
+const cardDesc = document.getElementById('cardDesc');
+
+placeCount.textContent = `${PLACES.length} LOCATIONS`;
+
+PLACES.forEach(place => {
+  const btn = document.createElement('button');
+  btn.className = 'place-row';
+  btn.innerHTML = `
+    <span class="place-row__dot"></span>
+    <div>
+      <span class="place-row__name">${place.name}</span>
+      <span class="place-row__region">${place.region}</span>
+    </div>
+    <span class="place-row__go">→</span>
+  `;
+  btn.addEventListener('click', () => {
+    closePanel();
+    map.flyTo([place.lat, place.lng], 8, { duration: 1.2 });
+    setTimeout(() => openModal(place), 1300);
+  });
+  placeList.appendChild(btn);
+});
+
+placesBtn.addEventListener('click', () => {
+  panel.classList.add('is-open');
+  scrim.classList.add('is-on');
+});
+
+function closePanel() {
+  panel.classList.remove('is-open');
+  scrim.classList.remove('is-on');
+}
+
+scrim.addEventListener('click', closePanel);
+
+function openModal(place) {
+  cardTitle.textContent = place.name;
+  cardRegion.textContent = place.region;
+  cardDesc.textContent = place.desc;
+  cardMedia.innerHTML = place.embed;
+  modal.classList.add('is-open');
+}
+
+function closeModal() {
+  modal.classList.remove('is-open');
+  cardMedia.innerHTML = '';
+}
+
+cardClose.addEventListener('click', closeModal);
+modalBackdrop.addEventListener('click', closeModal);
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closePanel();
+  }
+});
+</script>
+</body>
+</html>
