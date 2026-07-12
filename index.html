@@ -354,10 +354,18 @@ const PH_GEO = {"type":"Feature","properties":{"name":"Philippines"},"geometry":
    ========================================================================= */
 const SAMPLE = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/";
 const PLACES = [
-  { name:"Manila",   region:"Metro Manila",       lat:14.5896, lng:120.9806,
-    blurb:"The capital's old stone walls of Intramuros, centuries-old churches, and a famous sunset over Manila Bay.",
-    video: "https://www.youtube.com/watch?v=5-kmuzGDtdY" },
-
+  { name:"El Nido Big Lagoon",   region:"Palawan",       lat:11.1537, lng:119.3204,
+    blurb:"A breathtaking, emerald-green lagoon enclosed by towering, dramatic limestone cliffs in Palawan.",
+    video: "https://youtu.be/wMPlgiVFLbA" },
+  { name:"Maria Christina Falls",   region:"Northern Mindanao",       lat:8.1837, lng:124.1947,
+    blurb:"A majestic, powerful waterfall in Iligan City that serves as a primary source of hydroelectric power for the region.",
+    video: "https://youtu.be/ZO9_HkrJvMY" },
+  { name:"Mayon Volcano",   region:"Albay",       lat:13.2548, lng:123.6861,
+    blurb:"A famously active volcano in Albay renowned worldwide for its exceptionally symmetrical, near-perfect cone shape.",
+    video: "https://youtu.be/nxeHTa70mIY" },
+   { name:"Paoay Sand Dunes",   region:"Ilocos",       lat:18.1725, lng:120.5186,
+    blurb:"A vast, coastal desert landscape in Ilocos Norte popular for thrilling 4x4 off-road rides and sandboarding.",
+    video: "https://youtu.be/QfzJWaI4HcA" },
   { name:"Batanes",   region:"Batanes",       lat:20.4277, lng:121.9706,
     blurb:" The northernmost and smallest province in the ⁠Philippines, celebrated for its dramatic rolling hills, pristine coastlines, and the preserved, centuries-old stone houses of the indigenous ⁠Ivatan people.",
     video: "https://www.youtube.com/watch?v=5-kmuzGDtdY" },
@@ -507,8 +515,8 @@ const DEMO_PREFIX = SAMPLE; // used only to show the "sample clip" note
     elRegion.textContent = p.region;
     elTitle.textContent  = p.name;
     elDesc.textContent   = p.blurb;
-    elNote.hidden = !(p.video && p.video.indexOf(DEMO_PREFIX) === 0);
-
+    //elNote.hidden = !(p.video && p.video.indexOf(DEMO_PREFIX) === 0);
+    elNote.hidden = true;
     buildMedia(p.video);
 
     lastFocus = document.activeElement;
